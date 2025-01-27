@@ -6,113 +6,184 @@
 #define TRIG_PIN A4   // Trigger do HC-SR04
 
 // === INSTÂNCIAS DOS MOTORES ===
-// Estão ligados nas saídas M2 e M3 do Shield (exemplo), mas ajuste conforme seu hardware
-AF_DCMotor motorLeft(2);  // Motor conectado à porta M2
-AF_DCMotor motorRight(3); // Motor conectado à porta M3
+AF_DCMotor motorLeft(2);   // Motor da esquerda (porta M2 do Shield)
+AF_DCMotor motorRight(3);  // Motor da direita (porta M3 do Shield)
 
-// === CONSTANTES E VARIÁVEIS ===
-int velocidade = 150;       // Velocidade dos motores (0-255)
-long distanciaLimite = 5;  // Distância limite em cm para considerar obstáculo
-unsigned long tempoGiro = 500; // Tempo (ms) para fazer o giro de desvio
+// === CONSTANTES E VARIÁVEIS GLOBAIS ===
+int velocidade = 150;         // Velocidade base dos motores (0-255)
+long distanciaLimite = 10;    // Limite em cm para considerar obstáculo
+unsigned long tempoRe = 400;  // Tempo (ms) de ré ao detectar obstáculo
+unsigned long tempoGiroCheck = 400; // Tempo (ms) para girar e verificar distância
+unsigned long tempoGiroFinal = 500; // Tempo (ms) para girar de fato e desviar
 
-// Função para medir distância em cm usando o HC-SR04
-long medirDistancia() {
-  // Garante que o Trigger esteja em LOW por um curto tempo
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-
-  // Envia pulso de 10 microssegundos para o Trigger
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  // Mede o tempo do pulso retornado no Echo
-  long duracao = pulseIn(ECHO_PIN, HIGH);
-
-  // Converte o tempo (em microssegundos) em distância (em cm)
-  // Fórmula aproximada: distância em cm = (tempo / 2) / 29.1
-  // (pois a velocidade do som é ~340 m/s, e há ida e volta)
-  long distancia = (duracao / 2) / 29.1;
-  
-  return distancia;
-}
-
-// Função para mover os motores para frente
+// -------------------------------------------------------------------
+//  FUNÇÕES DE MOVIMENTO
+// -------------------------------------------------------------------
 void moverFrente() {
   motorLeft.run(FORWARD);
   motorRight.run(FORWARD);
 }
 
-// Função para mover os motores para trás
 void moverTras() {
   motorLeft.run(BACKWARD);
   motorRight.run(BACKWARD);
 }
 
-// Função para parar os motores
 void pararMotores() {
   motorLeft.run(RELEASE);
   motorRight.run(RELEASE);
 }
 
-// Função para girar à esquerda
 void girarEsquerda() {
   motorLeft.run(BACKWARD);
   motorRight.run(FORWARD);
 }
 
-// Função para girar à direita
 void girarDireita() {
   motorLeft.run(FORWARD);
   motorRight.run(BACKWARD);
 }
 
+// -------------------------------------------------------------------
+//  FUNÇÃO PARA MEDIR DISTÂNCIA COM HC-SR04
+// -------------------------------------------------------------------
+long medirDistancia() {
+  // Garante nível LOW no trigger por pelo menos 2 microssegundos
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+
+  // Gera pulso de 10 microssegundos no trigger
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  // Mede o tempo (em microssegundos) do retorno no echo
+  long duracao = pulseIn(ECHO_PIN, HIGH);
+
+  // Converte tempo em distância (cm)
+  long distancia = (duracao / 2) / 29.1;
+  return distancia;
+}
+
+// -------------------------------------------------------------------
+//  FAZ UMA "LEITURA DIRECIONADA" DA DISTÂNCIA:
+//  1) Gira o robô para um lado por X tempo
+//  2) Mede a distância
+//  3) Volta ao centro
+//  Retorna a distância lida.
+// -------------------------------------------------------------------
+long medirDistanciaAnguloEsquerda() {
+  // Gira levemente para esquerda
+  girarEsquerda();
+  delay(tempoGiroCheck);
+
+  // Para para estabilizar e medir
+  pararMotores();
+  delay(100);
+  
+  // Faz a leitura
+  long dist = medirDistancia();
+  
+  // Volta ao centro (girando para a direita pelo mesmo tempo)
+  girarDireita();
+  delay(tempoGiroCheck);
+  pararMotores();
+
+  return dist;
+}
+
+long medirDistanciaAnguloDireita() {
+  // Gira levemente para direita
+  girarDireita();
+  delay(tempoGiroCheck);
+
+  // Para para estabilizar e medir
+  pararMotores();
+  delay(100);
+
+  // Faz a leitura
+  long dist = medirDistancia();
+  
+  // Volta ao centro (girando para a esquerda pelo mesmo tempo)
+  girarEsquerda();
+  delay(tempoGiroCheck);
+  pararMotores();
+
+  return dist;
+}
+
+// -------------------------------------------------------------------
+//  SETUP
+// -------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
-  Serial.println("Iniciando Robo com Desvio Ultrassonico");
+  Serial.println("Iniciando Robô Inteligente com Varredura Simples");
 
   // Configura pinos do HC-SR04
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
 
-  // Configura a velocidade dos motores
+  // Configura velocidade dos motores
   motorLeft.setSpeed(velocidade);
   motorRight.setSpeed(velocidade);
 
-  // Semente para gerar valores aleatórios (opcional, caso queira maior variação)
-  randomSeed(analogRead(0));
+  // Usar randomSeed(analogRead(0)) se ainda quiser alguma ação aleatória no futuro
+  // randomSeed(analogRead(0));
 }
 
+// -------------------------------------------------------------------
+//  LOOP PRINCIPAL
+// -------------------------------------------------------------------
 void loop() {
+  // Lê a distância frontal
   long distancia = medirDistancia();
-  Serial.print("Distancia: ");
+
+  Serial.print("Distancia frontal: ");
   Serial.print(distancia);
   Serial.println(" cm");
 
-  // Verifica se há obstáculo próximo
+  // Verifica se há obstáculo
   if (distancia > 0 && distancia < distanciaLimite) {
-    // Obstáculo detectado: anda para trás
+    // 1) Para e recua um pouco
+    Serial.println("Obstaculo detectado! Recuando...");
     moverTras();
-    delay(600); // Ajuste esse tempo conforme necessidade
+    delay(tempoRe);
 
-    // Escolhe aleatoriamente se vai girar à esquerda (0) ou à direita (1)
-    int direcao = random(0, 2);
-    if (direcao == 0) {
-      Serial.println("Virando ESQUERDA...");
+    pararMotores();
+    delay(100);
+
+    // 2) Faz varredura: gira levemente à esquerda, mede, gira levemente à direita, mede
+    Serial.println("Verificando melhor direcao (Esquerda vs Direita)...");
+    long distEsquerda = medirDistanciaAnguloEsquerda();
+    long distDireita  = medirDistanciaAnguloDireita();
+
+    Serial.print("Distancia esquerda: ");
+    Serial.print(distEsquerda);
+    Serial.println(" cm");
+
+    Serial.print("Distancia direita: ");
+    Serial.print(distDireita);
+    Serial.println(" cm");
+
+    // 3) Decide para onde girar de acordo com a maior distância (ou igual)
+    if (distEsquerda > distDireita) {
+      Serial.println("Girando para ESQUERDA para desviar");
       girarEsquerda();
     } else {
-      Serial.println("Virando DIREITA...");
+      Serial.println("Girando para DIREITA para desviar");
       girarDireita();
     }
-    
-    delay(tempoGiro); // Gira pelo tempo definido
-    
-    // Retoma movimento para frente
+    delay(tempoGiroFinal); // Executa o giro
+    pararMotores();
+
+    // 4) Segue em frente novamente
+    Serial.println("Retomando movimento para frente");
     moverFrente();
+
   } else {
-    // Se não há obstáculo, segue em frente
+    // Se não há obstáculo, segue normalmente
     moverFrente();
   }
 
-  delay(100); // Ajuste para controlar a frequência de leitura do sensor
+  delay(100); // Ajuste conforme necessidade (frequência de atualização)
 }
