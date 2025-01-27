@@ -20,5 +20,5 @@ void loop() {
   motor.run(FORWARD); // Gira o motor no sentido horário
   motor2.run(BACKWARD); // Gira o motor no sentido horário
   delay(2000);
-
+ batatinha firta 123 // faça motor girar 
 }
