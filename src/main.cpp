@@ -2,29 +2,38 @@
 #include <AFMotor.h>
 
 // === PINAGEM DO SENSOR ULTRASSÔNICO ===
-#define ECHO_PIN A5   // Echo do HC-SR04
-#define TRIG_PIN A4   // Trigger do HC-SR04
+#define ECHO_PIN A5   // Echo do HC-SR04 (Echo)
+#define TRIG_PIN A4   // Trigger do HC-SR04 (Trigger)
 
-// === INSTÂNCIAS DOS MOTORES ===
+// === INSTÂNCIAS DOS MOTORES (Adafruit Motor Shield) ===
 AF_DCMotor motorLeft(2);   // Motor da esquerda (porta M2 do Shield)
 AF_DCMotor motorRight(3);  // Motor da direita (porta M3 do Shield)
 
-// === CONSTANTES E VARIÁVEIS GLOBAIS ===
-int velocidade = 150;         // Velocidade base dos motores (0-255)
-long distanciaLimite = 10;    // Limite em cm para considerar obstáculo
-unsigned long tempoRe = 400;  // Tempo (ms) de ré ao detectar obstáculo
-unsigned long tempoGiroCheck = 400; // Tempo (ms) para girar e verificar distância
-unsigned long tempoGiroFinal = 500; // Tempo (ms) para girar de fato e desviar
+// === VELOCIDADES DE CADA RODA (0-255) ===
+int velocidadeEsquerda = 60;
+int velocidadeDireita  = 80;
+
+// === PARÂMETROS DE DESVIO ===
+long distanciaLimite = 10;       // Em cm - se o obstáculo estiver mais perto que isso, desviar
+unsigned long tempoRe = 500;     // (ms) tempo de ré ao detectar obstáculo
+unsigned long tempoGiroVarredura = 600; // (ms) tempo para girar ao “examinar” um lado
+unsigned long tempoGiroDesvio    = 800; // (ms) tempo para girar de fato ao desviar
 
 // -------------------------------------------------------------------
 //  FUNÇÕES DE MOVIMENTO
 // -------------------------------------------------------------------
 void moverFrente() {
+  motorLeft.setSpeed(velocidadeEsquerda);
+  motorRight.setSpeed(velocidadeDireita);
+
   motorLeft.run(FORWARD);
   motorRight.run(FORWARD);
 }
 
 void moverTras() {
+  motorLeft.setSpeed(velocidadeEsquerda);
+  motorRight.setSpeed(velocidadeDireita);
+
   motorLeft.run(BACKWARD);
   motorRight.run(BACKWARD);
 }
@@ -35,11 +44,17 @@ void pararMotores() {
 }
 
 void girarEsquerda() {
+  motorLeft.setSpeed(velocidadeEsquerda);
+  motorRight.setSpeed(velocidadeDireita);
+
   motorLeft.run(BACKWARD);
   motorRight.run(FORWARD);
 }
 
 void girarDireita() {
+  motorLeft.setSpeed(velocidadeEsquerda);
+  motorRight.setSpeed(velocidadeDireita);
+
   motorLeft.run(FORWARD);
   motorRight.run(BACKWARD);
 }
@@ -66,49 +81,51 @@ long medirDistancia() {
 }
 
 // -------------------------------------------------------------------
-//  FAZ UMA "LEITURA DIRECIONADA" DA DISTÂNCIA:
-//  1) Gira o robô para um lado por X tempo
-//  2) Mede a distância
-//  3) Volta ao centro
-//  Retorna a distância lida.
+//  FUNÇÃO PARA "OLHAR" UM LADO E RETORNAR DISTÂNCIA (COM SENSOR INVERTIDO)
 // -------------------------------------------------------------------
 long medirDistanciaAnguloEsquerda() {
-  // Gira levemente para esquerda
-  girarEsquerda();
-  delay(tempoGiroCheck);
+  // Como o sensor está invertido, girar para a "esquerda" será na prática girar para a DIREITA
+  Serial.println(">> Girando para ESQUERDA para varredura (sensor invertido)");
+  girarDireita(); // Inverte o lado
+  delay(tempoGiroVarredura);
 
-  // Para para estabilizar e medir
   pararMotores();
-  delay(100);
-  
-  // Faz a leitura
+  delay(100);  // Pequena pausa para estabilizar a leitura
+
   long dist = medirDistancia();
-  
-  // Volta ao centro (girando para a direita pelo mesmo tempo)
-  girarDireita();
-  delay(tempoGiroCheck);
-  pararMotores();
+  Serial.print("   Distancia (varrendo E): ");
+  Serial.print(dist);
+  Serial.println(" cm");
 
+  // Volta ao centro girando para o lado oposto (esquerda)
+  Serial.println(">> Retornando ao centro...");
+  girarEsquerda(); // Inverte o retorno
+  delay(tempoGiroVarredura);
+  pararMotores();
+  
   return dist;
 }
 
 long medirDistanciaAnguloDireita() {
-  // Gira levemente para direita
-  girarDireita();
-  delay(tempoGiroCheck);
+  // Como o sensor está invertido, girar para a "direita" será na prática girar para a ESQUERDA
+  Serial.println(">> Girando para DIREITA para varredura (sensor invertido)");
+  girarEsquerda(); // Inverte o lado
+  delay(tempoGiroVarredura);
 
-  // Para para estabilizar e medir
   pararMotores();
-  delay(100);
+  delay(100);  // Pequena pausa para estabilizar a leitura
 
-  // Faz a leitura
   long dist = medirDistancia();
-  
-  // Volta ao centro (girando para a esquerda pelo mesmo tempo)
-  girarEsquerda();
-  delay(tempoGiroCheck);
-  pararMotores();
+  Serial.print("   Distancia (varrendo D): ");
+  Serial.print(dist);
+  Serial.println(" cm");
 
+  // Volta ao centro girando para o lado oposto (direita)
+  Serial.println(">> Retornando ao centro...");
+  girarDireita(); // Inverte o retorno
+  delay(tempoGiroVarredura);
+  pararMotores();
+  
   return dist;
 }
 
@@ -117,18 +134,15 @@ long medirDistanciaAnguloDireita() {
 // -------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
-  Serial.println("Iniciando Robô Inteligente com Varredura Simples");
+  Serial.println("Iniciando Robô com Sensor Ultrassônico Invertido");
 
   // Configura pinos do HC-SR04
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
 
-  // Configura velocidade dos motores
-  motorLeft.setSpeed(velocidade);
-  motorRight.setSpeed(velocidade);
-
-  // Usar randomSeed(analogRead(0)) se ainda quiser alguma ação aleatória no futuro
-  // randomSeed(analogRead(0));
+  // Ajusta a velocidade inicial dos motores
+  motorLeft.setSpeed(velocidadeEsquerda);
+  motorRight.setSpeed(velocidadeDireita);
 }
 
 // -------------------------------------------------------------------
@@ -136,54 +150,47 @@ void setup() {
 // -------------------------------------------------------------------
 void loop() {
   // Lê a distância frontal
-  long distancia = medirDistancia();
+  long distanciaFrontal = medirDistancia();
 
   Serial.print("Distancia frontal: ");
-  Serial.print(distancia);
+  Serial.print(distanciaFrontal);
   Serial.println(" cm");
 
-  // Verifica se há obstáculo
-  if (distancia > 0 && distancia < distanciaLimite) {
-    // 1) Para e recua um pouco
-    Serial.println("Obstaculo detectado! Recuando...");
+  // Se a distância frontal for menor que o limite, faz o desvio
+  if (distanciaFrontal > 0 && distanciaFrontal < distanciaLimite) {
+    Serial.println("Obstáculo detectado! Recuando...");
+    
+    // 1) RECUA
     moverTras();
     delay(tempoRe);
 
     pararMotores();
     delay(100);
 
-    // 2) Faz varredura: gira levemente à esquerda, mede, gira levemente à direita, mede
-    Serial.println("Verificando melhor direcao (Esquerda vs Direita)...");
+    // 2) VARREDURA ESQUERDA / DIREITA
+    Serial.println("Verificando melhor direção (Esquerda vs Direita)...");
     long distEsquerda = medirDistanciaAnguloEsquerda();
     long distDireita  = medirDistanciaAnguloDireita();
 
-    Serial.print("Distancia esquerda: ");
-    Serial.print(distEsquerda);
-    Serial.println(" cm");
-
-    Serial.print("Distancia direita: ");
-    Serial.print(distDireita);
-    Serial.println(" cm");
-
-    // 3) Decide para onde girar de acordo com a maior distância (ou igual)
+    // 3) DECISÃO
     if (distEsquerda > distDireita) {
-      Serial.println("Girando para ESQUERDA para desviar");
+      Serial.println("==> Mais livre à ESQUERDA. Desviando para ESQUERDA...");
       girarEsquerda();
     } else {
-      Serial.println("Girando para DIREITA para desviar");
+      Serial.println("==> Mais livre à DIREITA (ou igual). Desviando para DIREITA...");
       girarDireita();
     }
-    delay(tempoGiroFinal); // Executa o giro
+    delay(tempoGiroDesvio);
     pararMotores();
 
-    // 4) Segue em frente novamente
-    Serial.println("Retomando movimento para frente");
+    // 4) SEGUE EM FRENTE
+    Serial.println("Obstáculo contornado. Seguindo em frente.");
     moverFrente();
 
   } else {
-    // Se não há obstáculo, segue normalmente
+    // Caso não haja obstáculo, continua para frente
     moverFrente();
   }
 
-  delay(100); // Ajuste conforme necessidade (frequência de atualização)
+  delay(100); // Frequência de leitura
 }
