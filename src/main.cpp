@@ -2,27 +2,32 @@
 #include <AFMotor.h>
 
 // === PINAGEM DO SENSOR ULTRASSÔNICO ===
-#define ECHO_PIN A5   // Echo do HC-SR04 (Echo)
-#define TRIG_PIN A4   // Trigger do HC-SR04 (Trigger)
+#define ECHO_PIN A5 // Echo do HC-SR04 (Echo)
+#define TRIG_PIN A4 // Trigger do HC-SR04 (Trigger)
 
 // === INSTÂNCIAS DOS MOTORES (Adafruit Motor Shield) ===
-AF_DCMotor motorLeft(2);   // Motor da esquerda (porta M2 do Shield)
-AF_DCMotor motorRight(3);  // Motor da direita (porta M3 do Shield)
+AF_DCMotor motorLeft(2);  // Motor da esquerda (porta M2 do Shield)
+AF_DCMotor motorRight(3); // Motor da direita (porta M3 do Shield)
 
 // === VELOCIDADES DE CADA RODA (0-255) ===
 int velocidadeEsquerda = 60;
-int velocidadeDireita  = 80;
+int velocidadeDireita = 80;
 
 // === PARÂMETROS DE DESVIO ===
-long distanciaLimite = 10;       // Em cm - se o obstáculo estiver mais perto que isso, desviar
-unsigned long tempoRe = 500;     // (ms) tempo de ré ao detectar obstáculo
+long distanciaLimite = 10;              // Em cm - se o obstáculo estiver mais perto que isso, desviar
+unsigned long tempoRe = 500;            // (ms) tempo de ré ao detectar obstáculo
 unsigned long tempoGiroVarredura = 600; // (ms) tempo para girar ao “examinar” um lado
-unsigned long tempoGiroDesvio    = 800; // (ms) tempo para girar de fato ao desviar
+unsigned long tempoGiroDesvio = 800;    // (ms) tempo para girar de fato ao desviar
+
+// === VARIÁVEIS PARA CONTROLE DE TEMPO ===
+unsigned long tempoUltimaLeitura = 0;
+const unsigned long intervaloLeitura = 100; // Intervalo entre leituras (ms)
 
 // -------------------------------------------------------------------
 //  FUNÇÕES DE MOVIMENTO
 // -------------------------------------------------------------------
-void moverFrente() {
+void moverFrente()
+{
   motorLeft.setSpeed(velocidadeEsquerda);
   motorRight.setSpeed(velocidadeDireita);
 
@@ -30,7 +35,8 @@ void moverFrente() {
   motorRight.run(FORWARD);
 }
 
-void moverTras() {
+void moverTras()
+{
   motorLeft.setSpeed(velocidadeEsquerda);
   motorRight.setSpeed(velocidadeDireita);
 
@@ -38,12 +44,14 @@ void moverTras() {
   motorRight.run(BACKWARD);
 }
 
-void pararMotores() {
+void pararMotores()
+{
   motorLeft.run(RELEASE);
   motorRight.run(RELEASE);
 }
 
-void girarEsquerda() {
+void girarEsquerda()
+{
   motorLeft.setSpeed(velocidadeEsquerda);
   motorRight.setSpeed(velocidadeDireita);
 
@@ -51,7 +59,8 @@ void girarEsquerda() {
   motorRight.run(FORWARD);
 }
 
-void girarDireita() {
+void girarDireita()
+{
   motorLeft.setSpeed(velocidadeEsquerda);
   motorRight.setSpeed(velocidadeDireita);
 
@@ -62,7 +71,8 @@ void girarDireita() {
 // -------------------------------------------------------------------
 //  FUNÇÃO PARA MEDIR DISTÂNCIA COM HC-SR04
 // -------------------------------------------------------------------
-long medirDistancia() {
+long medirDistancia()
+{
   // Garante nível LOW no trigger por pelo menos 2 microssegundos
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
@@ -81,60 +91,61 @@ long medirDistancia() {
 }
 
 // -------------------------------------------------------------------
-//  FUNÇÃO PARA "OLHAR" UM LADO E RETORNAR DISTÂNCIA (COM SENSOR INVERTIDO)
+//  FUNÇÃO PARA "OLHAR" UM LADO E RETORNAR DISTÂNCIA
 // -------------------------------------------------------------------
-long medirDistanciaAnguloEsquerda() {
-  // Como o sensor está invertido, girar para a "esquerda" será na prática girar para a DIREITA
-  Serial.println(">> Girando para ESQUERDA para varredura (sensor invertido)");
-  girarDireita(); // Inverte o lado
+long medirDistanciaAnguloEsquerda()
+{
+  Serial.println(">> Girando para ESQUERDA para varredura");
+  girarEsquerda();
   delay(tempoGiroVarredura);
 
   pararMotores();
-  delay(100);  // Pequena pausa para estabilizar a leitura
+  delay(100); // Pequena pausa para estabilizar a leitura
 
   long dist = medirDistancia();
   Serial.print("   Distancia (varrendo E): ");
   Serial.print(dist);
   Serial.println(" cm");
 
-  // Volta ao centro girando para o lado oposto (esquerda)
+  // Volta ao centro girando para o lado oposto (direita)
   Serial.println(">> Retornando ao centro...");
-  girarEsquerda(); // Inverte o retorno
+  girarDireita();
   delay(tempoGiroVarredura);
   pararMotores();
-  
+
   return dist;
 }
 
-long medirDistanciaAnguloDireita() {
-  // Como o sensor está invertido, girar para a "direita" será na prática girar para a ESQUERDA
-  Serial.println(">> Girando para DIREITA para varredura (sensor invertido)");
-  girarEsquerda(); // Inverte o lado
+long medirDistanciaAnguloDireita()
+{
+  Serial.println(">> Girando para DIREITA para varredura");
+  girarDireita();
   delay(tempoGiroVarredura);
 
   pararMotores();
-  delay(100);  // Pequena pausa para estabilizar a leitura
+  delay(100); // Pequena pausa para estabilizar a leitura
 
   long dist = medirDistancia();
   Serial.print("   Distancia (varrendo D): ");
   Serial.print(dist);
   Serial.println(" cm");
 
-  // Volta ao centro girando para o lado oposto (direita)
+  // Volta ao centro girando para o lado oposto (esquerda)
   Serial.println(">> Retornando ao centro...");
-  girarDireita(); // Inverte o retorno
+  girarEsquerda();
   delay(tempoGiroVarredura);
   pararMotores();
-  
+
   return dist;
 }
 
 // -------------------------------------------------------------------
 //  SETUP
 // -------------------------------------------------------------------
-void setup() {
+void setup()
+{
   Serial.begin(115200);
-  Serial.println("Iniciando Robô com Sensor Ultrassônico Invertido");
+  Serial.println("Iniciando Robô com Sensor Ultrassônico");
 
   // Configura pinos do HC-SR04
   pinMode(TRIG_PIN, OUTPUT);
@@ -148,49 +159,63 @@ void setup() {
 // -------------------------------------------------------------------
 //  LOOP PRINCIPAL
 // -------------------------------------------------------------------
-void loop() {
-  // Lê a distância frontal
-  long distanciaFrontal = medirDistancia();
+void loop()
+{
+  unsigned long tempoAtual = millis();
 
-  Serial.print("Distancia frontal: ");
-  Serial.print(distanciaFrontal);
-  Serial.println(" cm");
+  // Só faz a leitura se passou o tempo necessário
+  if (tempoAtual - tempoUltimaLeitura >= intervaloLeitura)
+  {
+    // Lê a distância frontal
+    long distanciaFrontal = medirDistancia();
 
-  // Se a distância frontal for menor que o limite, faz o desvio
-  if (distanciaFrontal > 0 && distanciaFrontal < distanciaLimite) {
-    Serial.println("Obstáculo detectado! Recuando...");
-    
-    // 1) RECUA
-    moverTras();
-    delay(tempoRe);
+    Serial.print("Distancia frontal: ");
+    Serial.print(distanciaFrontal);
+    Serial.println(" cm");
 
-    pararMotores();
-    delay(100);
+    // Se a distância frontal for menor que o limite, faz o desvio
+    if (distanciaFrontal > 0 && distanciaFrontal < distanciaLimite)
+    {
+      Serial.println("Obstáculo detectado! Requando...");
 
-    // 2) VARREDURA ESQUERDA / DIREITA
-    Serial.println("Verificando melhor direção (Esquerda vs Direita)...");
-    long distEsquerda = medirDistanciaAnguloEsquerda();
-    long distDireita  = medirDistanciaAnguloDireita();
+      // 1) RECUA
+      moverTras();
+      delay(tempoRe);
 
-    // 3) DECISÃO
-    if (distEsquerda > distDireita) {
-      Serial.println("==> Mais livre à ESQUERDA. Desviando para ESQUERDA...");
-      girarEsquerda();
-    } else {
-      Serial.println("==> Mais livre à DIREITA (ou igual). Desviando para DIREITA...");
-      girarDireita();
+      pararMotores();
+      delay(100);
+
+      // 2) VARREDURA ESQUERDA / DIREITA
+      Serial.println("Verificando melhor direção (Esquerda vs Direita)...");
+      long distEsquerda = medirDistanciaAnguloEsquerda();
+      long distDireita = medirDistanciaAnguloDireita();
+
+      // 3) DECISÃO
+      if (distEsquerda > distDireita)
+      {
+        Serial.println("==> Mais livre à ESQUERDA. Desviando para ESQUERDA...");
+        girarEsquerda();
+      }
+      else
+      {
+        Serial.println("==> Mais livre à DIREITA (ou igual). Desviando para DIREITA...");
+        girarDireita();
+      }
+      delay(tempoGiroDesvio);
+      pararMotores();
+
+      // 4) SEGUE EM FRENTE
+      Serial.println("Obstáculo contornado. Seguindo em frente.");
+      moverFrente();
     }
-    delay(tempoGiroDesvio);
-    pararMotores();
+    else
+    {
+      // Caso não haja obstáculo, continua para frente
+      moverFrente();
+    }
 
-    // 4) SEGUE EM FRENTE
-    Serial.println("Obstáculo contornado. Seguindo em frente.");
-    moverFrente();
-
-  } else {
-    // Caso não haja obstáculo, continua para frente
-    moverFrente();
+    tempoUltimaLeitura = tempoAtual; // Atualiza o tempo da última leitura
   }
 
-  delay(100); // Frequência de leitura
+  // Outras funções e lógicas podem ser executadas aqui sem bloquear o fluxo do código
 }
